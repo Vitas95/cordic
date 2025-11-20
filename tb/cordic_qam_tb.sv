@@ -1,6 +1,16 @@
+//-------------------------------------------------------------------------
+// Top-level testbench module: cordic_exp_gen_tb
+//
+// This module serves as the verification environment for the Coordinatoinal 
+// Rotation Computer (CORDIC), which is expected to act as a quadrature 
+// amplitude modulation (QAM) demodulator. In QAM mode, this testbench is the 
+// source of an input theta counter specified as a test input data vector, as 
+// well as an input analog signal (simply a sinusoid) applied to the X input 
+// port of the module. At the same time, the Y input port is kept as a constant. 
+//-------------------------------------------------------------------------
 `timescale 1ns/1ps
 
-module cordic_tb ();
+module cordic_qam_tb ();
     
 parameter CLK_PERIOD = 1.0;
 

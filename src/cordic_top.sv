@@ -11,15 +11,16 @@ module cordic_top #(
     output logic [DATA_WIDTH-1:0]  X_out,
     output logic [DATA_WIDTH-1:0]  Y_out,
     output logic                   valid,
+    output logic [PHASE_WIDTH-1:0] error,
     input  logic [PHASE_WIDTH-1:0] phase_in,
     input  logic                   phase_valid_in
 );
-// TODO: add error (theta) as output port;
 // TODO: wrap input and output ports as axi stream;
 
 // Local parameters
 localparam COUNT_WIDTH = $clog2(STAGES);
 localparam VALID_DELAY = STAGES + 1;
+localparam real PI = 3.141592653589793;
     
 logic signed [PHASE_WIDTH-1:0] phase;
 logic                          phase_valid;
@@ -51,12 +52,12 @@ end
 // Theta preprocessing from -pi:pi to -pi/2:pi/2
 logic signed [PHASE_WIDTH-1:0] phase_wrapped;
 logic second_quad, third_quad, unwrap;
-assign second_quad = phase > 12868;
-assign third_quad = phase < -12868;
+assign second_quad = phase > shortint'(PI / 2 * $pow(2,PHASE_WIDTH-3));
+assign third_quad = phase < shortint'(-PI / 2 * $pow(2,PHASE_WIDTH-3));
 assign unwrap = second_quad | third_quad;
 always_ff @(posedge clk) begin
-    if (second_quad)        phase_wrapped <= phase - 25736;
-    else if (third_quad)    phase_wrapped <= phase + 25736;
+    if (second_quad)        phase_wrapped <= phase - shortint'(PI * $pow(2,PHASE_WIDTH-3));
+    else if (third_quad)    phase_wrapped <= phase + shortint'(PI * $pow(2,PHASE_WIDTH-3));
     else                    phase_wrapped <= phase;
 end
 
@@ -115,6 +116,7 @@ always_ff @(posedge clk) begin
             X_out <= stage[STAGES-1].x;
             Y_out <= stage[STAGES-1].y;
         end
+        error <= theta[STAGES-1];
     end 
 end
 
