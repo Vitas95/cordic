@@ -3,8 +3,8 @@
 //
 // This module serves as the verification environment for the Coordinatoinal 
 // Rotation Computer (CORDIC), which is expected to act as a quadrature 
-// amplitude modulation (QAM) demodulator. In QAM mode, this testbench is the 
-// source of an input theta counter specified as a test input data vector, as 
+// amplitude modulation (QAM) demodulator. In QAM mode, this testbench contains 
+// a phase counter fully written as a System Verilog function, as 
 // well as an input analog signal (simply a sinusoid) applied to the X input 
 // port of the module. At the same time, the Y input port is kept as a constant. 
 //-------------------------------------------------------------------------

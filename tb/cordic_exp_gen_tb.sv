@@ -3,7 +3,7 @@
 //
 // This module serves as the verification environment for the Coordinatoinal 
 // Rotation Computer (CORDIC), which is expected to generate an exponent with 
-// a specified frequency. In "generator mode," this testbench is the source of 
+// a specified frequency. In "generator mode," this testbench is simply 
 // a phase counter fully written as a System Verilog function. 
 //-------------------------------------------------------------------------
 
@@ -13,7 +13,7 @@ module cordic_exp_gen_tb ();
 
 // Simulation parameters
 parameter      CLK_PERIOD = 12.5;           // 80 MHz clock
-parameter real SYSTEM_CLK_FREQ_HZ = 80.0e6; // 80 MHz clock
+parameter real SYS_CLK_FREQ_HZ = 80.0e6; // 80 MHz clock
 parameter real PI = 3.141592653589793;
 parameter      PHASE_WIDTH = 16;
 
@@ -53,7 +53,8 @@ phase_valid <= 0;
 #(3*CLK_PERIOD);
 rst <= 0;
 #(CLK_PERIOD);
-apply_theta_calc(7.5e6, 100);
+calculate_freq_error(11.453e6);
+apply_theta_calc(11.453e6, 100);
 #2000 $stop;
 end
 
