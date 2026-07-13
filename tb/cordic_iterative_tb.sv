@@ -9,7 +9,7 @@
 
 `timescale 1ns/1ps
 
-module cordic_exp_gen_tb ();
+module cordic_iterative_tb ();
 
 // Simulation parameters
 parameter      CLK_PERIOD = 12.5;           // 80 MHz clock
@@ -31,7 +31,8 @@ logic                   valid, phase_valid;
 cordic_top #(
     .STAGES(8),
     .DATA_WIDTH(16),
-    .PHASE_WIDTH(PHASE_WIDTH)
+    .PHASE_WIDTH(PHASE_WIDTH),
+    .PIPLINED(0)
 ) dut (
     .clk(clk),
     .rst(rst),
@@ -54,8 +55,8 @@ phase_valid <= 0;
 rst <= 0;
 #(CLK_PERIOD);
 calculate_freq_error(11.453e6);
-apply_theta_calc(11.453e6, 100);
-#2000 $stop;
+apply_phase(11.453e6, 100, 20);
+#200000 $stop;
 end
 
 endmodule

@@ -1,7 +1,8 @@
 module cordic_top #(
     parameter STAGES = 4,
     parameter DATA_WIDTH = 16,
-    parameter PHASE_WIDTH = 16
+    parameter PHASE_WIDTH = 16,
+    parameter PIPLINED = 1
 ) (
     input clk,
     input rst,
@@ -19,8 +20,12 @@ module cordic_top #(
 
 // Local parameters
 localparam COUNT_WIDTH = $clog2(STAGES);
-localparam VALID_DELAY = STAGES + 1;
 localparam real PI = 3.141592653589793;
+
+// Delay is a sum of stages delay, input pipline delay 
+// and a phase wrap delay
+localparam VALID_DELAY = STAGES + 2;
+
     
 logic signed [PHASE_WIDTH-1:0] phase;
 logic                          phase_valid;
@@ -46,78 +51,147 @@ end
 logic signed [PHASE_WIDTH-1:0] atan [0:STAGES-1];
 initial begin
     for (int i = 0; i < STAGES; i++)
-        atan[i] = shortint'($atan($pow(2,-i))*$pow(2,PHASE_WIDTH-3));
+        atan[i] = int'($atan($pow(2,-i))*$pow(2,PHASE_WIDTH-3)); // int limits atan memory up to 32 bits
 end
 
 // Theta preprocessing from -pi:pi to -pi/2:pi/2
 logic signed [PHASE_WIDTH-1:0] phase_wrapped;
 logic second_quad, third_quad, unwrap;
-assign second_quad = phase > shortint'(PI / 2 * $pow(2,PHASE_WIDTH-3));
-assign third_quad = phase < shortint'(-PI / 2 * $pow(2,PHASE_WIDTH-3));
+assign second_quad = phase > int'(PI / 2 * $pow(2,PHASE_WIDTH-3));
+assign third_quad = phase < int'(-PI / 2 * $pow(2,PHASE_WIDTH-3));
 assign unwrap = second_quad | third_quad;
+
 always_ff @(posedge clk) begin
-    if (second_quad)        phase_wrapped <= phase - shortint'(PI * $pow(2,PHASE_WIDTH-3));
-    else if (third_quad)    phase_wrapped <= phase + shortint'(PI * $pow(2,PHASE_WIDTH-3));
+    if (second_quad)        phase_wrapped <= phase - int'(PI * $pow(2,PHASE_WIDTH-3));
+    else if (third_quad)    phase_wrapped <= phase + int'(PI * $pow(2,PHASE_WIDTH-3));
     else                    phase_wrapped <= phase;
 end
 
-// Cordic core
-complex                        stage [0:STAGES-1];
-logic signed [PHASE_WIDTH-1:0] theta [0:STAGES-1];
-
-always_ff @(posedge clk) begin
-    if (~(phase_wrapped[PHASE_WIDTH-1])) begin
-        stage[0].x <= init.x + init.y;
-        stage[0].y <= init.y - init.x;
-        theta[0]   <= phase_wrapped - atan[0];
-    end else if ((phase_wrapped[PHASE_WIDTH-1])) begin
-        stage[0].x <= init.x - init.y;
-        stage[0].y <= init.y + init.x;
-        theta[0]   <= phase_wrapped + atan[0];      
-    end
-end
-
 generate
-    always_ff @(posedge clk) begin
-        for (int i = 1; i < STAGES; i++) begin
-            if (~(theta[i-1][PHASE_WIDTH-1])) begin
-                stage[i].x <= stage[i-1].x + (stage[i-1].y >>> i);
-                stage[i].y <= stage[i-1].y - (stage[i-1].x >>> i);
-                theta[i]   <= theta[i-1] - atan[i];
-            end else if ((theta[i-1][PHASE_WIDTH-1])) begin
-                stage[i].x <= stage[i-1].x - (stage[i-1].y >>> i);
-                stage[i].y <= stage[i-1].y + (stage[i-1].x >>> i);
-                theta[i]   <= theta[i-1] + atan[i];      
-            end
-        end    
-    end
-endgenerate
+    
+    if (PIPLINED) begin: CORDIC_pipe
 
-// Valid and unwrap signals delay
-logic [VALID_DELAY-1:0] valid_delay, unwrap_delay;
-always_ff @(posedge clk) begin
-    if (rst) begin 
-        valid_delay  <= {valid_delay[VALID_DELAY-2:0],0};
-        unwrap_delay <= {unwrap_delay[VALID_DELAY-2:0],0};
-    end else begin
-        valid_delay <= {valid_delay[VALID_DELAY-2:0],phase_valid};
-        unwrap_delay <= {unwrap_delay[VALID_DELAY-2:0],unwrap};
-    end
-end
+        // CORDIC core piplined
+        complex                        stage [0:STAGES];
+        logic signed [PHASE_WIDTH-1:0] theta [0:STAGES];
 
-// Output piplining
-always_ff @(posedge clk) begin
-    valid <= valid_delay[VALID_DELAY-1];
-    if (valid_delay[VALID_DELAY-1]) begin
-        if (unwrap_delay[VALID_DELAY-1]) begin
-            X_out <= -stage[STAGES-1].x;
-            Y_out <= -stage[STAGES-1].y;
-        end else begin
-            X_out <= stage[STAGES-1].x;
-            Y_out <= stage[STAGES-1].y;
+        always_ff @(posedge clk) begin
+            stage[0] <= init;
+            theta[0] <= phase_wrapped;
         end
-        error <= theta[STAGES-1];
-    end 
-end
+
+        // CORDIC
+        always_ff @(posedge clk) begin
+            for (int i = 0; i < STAGES; i++) begin
+                if (~(theta[i][PHASE_WIDTH-1])) begin
+                    stage[i+1].x <= stage[i].x + (stage[i].y >>> i);
+                    stage[i+1].y <= stage[i].y - (stage[i].x >>> i);
+                    theta[i+1]   <= theta[i] - atan[i];
+                end else if ((theta[i][PHASE_WIDTH-1])) begin
+                    stage[i+1].x <= stage[i].x - (stage[i].y >>> i);
+                    stage[i+1].y <= stage[i].y + (stage[i].x >>> i);
+                    theta[i+1]   <= theta[i] + atan[i];      
+                end
+            end    
+        end
+
+        // Valid and unwrap signals delay
+        logic [VALID_DELAY-1:0] valid_delay, unwrap_delay;
+        always_ff @(posedge clk) begin
+            if (rst) begin 
+                valid_delay  <= {valid_delay[VALID_DELAY-2:0],0};
+                unwrap_delay <= {unwrap_delay[VALID_DELAY-2:0],0};
+            end else begin
+                valid_delay <= {valid_delay[VALID_DELAY-2:0],phase_valid};
+                unwrap_delay <= {unwrap_delay[VALID_DELAY-2:0],unwrap};
+            end
+        end
+
+        // Output piplining
+        always_ff @(posedge clk) begin
+        valid <= valid_delay[VALID_DELAY-1];
+            if (valid_delay[VALID_DELAY-1]) begin
+                if (unwrap_delay[VALID_DELAY-1]) begin
+                    X_out <= -stage[STAGES].x;
+                    Y_out <= -stage[STAGES].y;
+                end else begin
+                    X_out <= stage[STAGES].x;
+                    Y_out <= stage[STAGES].y;
+                end
+                error <= theta[STAGES-1];
+            end 
+        end
+
+    end else begin: CORDIC_iter
+        // CORDIC iterative
+        complex                        iter_stage;
+        logic signed [PHASE_WIDTH-1:0] iter_theta;
+        logic [$clog2(STAGES)-1:0]     iter_cnt;
+        logic                          iter_busy;
+        logic                          iter_valid;
+        logic                          unwrap_saved;
+        logic                          phase_valid_d;
+
+        always_ff @(posedge clk) begin
+            // Compensating phase wrap delay
+            phase_valid_d <= phase_valid;
+        end
+        
+        always_ff @(posedge clk) begin
+        if (rst) begin
+            iter_cnt     <= '0;
+            iter_busy    <= 1'b0;
+            iter_valid   <= 1'b0;
+            unwrap_saved <= 1'b0;
+        end else begin
+            iter_valid <= 1'b0;
+
+            if (!iter_busy & phase_valid_d) begin
+                iter_stage   <= init;
+                iter_theta   <= phase_wrapped;
+                unwrap_saved <= unwrap;
+                iter_cnt     <= '0;
+                iter_busy    <= 1'b1;
+            end else if (iter_busy) begin
+                
+                // CORDIC
+                if (~iter_theta[PHASE_WIDTH-1]) begin
+                    iter_stage.x <= iter_stage.x + (iter_stage.y >>> iter_cnt);
+                    iter_stage.y <= iter_stage.y - (iter_stage.x >>> iter_cnt);
+                    iter_theta   <= iter_theta   - atan[iter_cnt];
+                end else begin
+                    iter_stage.x <= iter_stage.x - (iter_stage.y >>> iter_cnt);
+                    iter_stage.y <= iter_stage.y + (iter_stage.x >>> iter_cnt);
+                    iter_theta   <= iter_theta   + atan[iter_cnt];
+                end
+
+                if (iter_cnt == STAGES-1) begin
+                    iter_busy  <= 1'b0;
+                    iter_valid <= 1'b1;
+                    iter_cnt   <= 1'b0;
+                end else if (~(iter_cnt == STAGES-1) & iter_busy) begin
+                    iter_cnt <= iter_cnt + 1'b1;
+                end
+            end
+        end
+        end
+
+        // Output piplining
+        always_ff @(posedge clk) begin
+        valid <= iter_valid;
+            if (iter_valid) begin
+                if (unwrap_saved) begin
+                    X_out <= -iter_stage.x;
+                    Y_out <= -iter_stage.y;
+                end else begin
+                    X_out <= iter_stage.x;
+                    Y_out <= iter_stage.y;
+                end
+                error <= iter_theta;
+            end 
+        end        
+    end
+
+endgenerate
 
 endmodule

@@ -78,19 +78,50 @@ endfunction
         $display("--------------------------------------------------");
 endfunction
 
-task apply_theta_calc (
+// task apply_theta_piplined (
+//   input real frequency_hz,
+//   input int n_of_samples
+// );
+//     real data;
+//     int line_cnt;
+
+//     // Apply calculated phase at the CORDIC DUT input
+//     phase_valid <= 1;
+//     while (line_cnt <= n_of_samples) begin
+//         data = calc_phase_radians(line_cnt, frequency_hz);
+//         phase = shortint'(data*2**(PHASE_WIDTH-3));
+//         #(CLK_PERIOD);
+//         line_cnt++;
+//     end
+//     phase_valid <= 0;
+// endtask
+
+task apply_phase (
   input real frequency_hz,
-  input int n_of_samples
+  input int n_of_samples,
+  input int clk_per_valid 
 );
     real data;
     int line_cnt;
 
     // Apply calculated phase at the CORDIC DUT input
-    phase_valid <= 1;
+    phase_valid <= 0;
+    phase       <= 0;
+    @(posedge clk);
+
     while (line_cnt <= n_of_samples) begin
         data = calc_phase_radians(line_cnt, frequency_hz);
-        phase = shortint'(data*2**(PHASE_WIDTH-3));
-        #(CLK_PERIOD);
+        phase = int'(data*2**(PHASE_WIDTH-3));
+        phase_valid <= 1;
+        @(posedge clk);
+
+        if (clk_per_valid > 1) begin
+            phase_valid <= 0;
+            repeat (clk_per_valid - 1) begin
+                @(posedge clk);
+            end
+        end
+
         line_cnt++;
     end
     phase_valid <= 0;
