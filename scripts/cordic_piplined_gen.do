@@ -19,7 +19,7 @@ set obj cordic_piplined_tb/dut
 add wave -group DUT sim:/$obj/*
 add wave -group DUT sim:/$obj/CORDIC_pipe/*
 
-run 1000ns
+run 1500ns
 
 configure wave -signalnamewidth 1
 configure wave -namecolwidth 300

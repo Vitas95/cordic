@@ -16,7 +16,6 @@ module cordic_top #(
     input  logic [PHASE_WIDTH-1:0] phase_in,
     input  logic                   phase_valid_in
 );
-// TODO: wrap input and output ports as axi stream;
 
 // Local parameters
 localparam COUNT_WIDTH = $clog2(STAGES);
