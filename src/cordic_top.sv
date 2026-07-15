@@ -50,20 +50,18 @@ end
 logic signed [PHASE_WIDTH-1:0] atan [0:STAGES-1];
 initial begin
     for (int i = 0; i < STAGES; i++)
-        atan[i] = int'($atan($pow(2,-i))*$pow(2,PHASE_WIDTH-3)); // int limits atan memory up to 32 bits
+        atan[i] = int'(($atan($pow(2,-i)) / PI / 2)*$pow(2,PHASE_WIDTH)); // int limits atan memory up to 32 bits
 end
 
 // Theta preprocessing from -pi:pi to -pi/2:pi/2
 logic signed [PHASE_WIDTH-1:0] phase_wrapped;
 logic second_quad, third_quad, unwrap;
-assign second_quad = phase > int'(PI / 2 * $pow(2,PHASE_WIDTH-3));
-assign third_quad = phase < int'(-PI / 2 * $pow(2,PHASE_WIDTH-3));
+assign second_quad = phase[PHASE_WIDTH-2] & ~phase[PHASE_WIDTH-1];
+assign third_quad  = ~phase[PHASE_WIDTH-2] & phase[PHASE_WIDTH-1];
 assign unwrap = second_quad | third_quad;
 
 always_ff @(posedge clk) begin
-    if (second_quad)        phase_wrapped <= phase - int'(PI * $pow(2,PHASE_WIDTH-3));
-    else if (third_quad)    phase_wrapped <= phase + int'(PI * $pow(2,PHASE_WIDTH-3));
-    else                    phase_wrapped <= phase;
+    phase_wrapped <= {phase[PHASE_WIDTH-2], phase[PHASE_WIDTH-2:0]};
 end
 
 generate

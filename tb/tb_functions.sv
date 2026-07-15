@@ -110,7 +110,7 @@ task apply_phase (
 
     while (line_cnt <= n_of_samples) begin
         data = calc_phase_radians(line_cnt, frequency_hz);
-        phase = int'(data*2**(PHASE_WIDTH-3));
+        phase = shortint'(data*2**(PHASE_WIDTH));
         phase_valid <= 1;
         @(posedge clk);
 
